@@ -1,0 +1,85 @@
+USE IMT577_DB_Zack_Spolar;
+
+
+--Store with the greatest total profits- the share of total profits can be multiplied by the bonus amount to allocate store bonuses
+
+Create View Store_Profitability AS
+Select D.StoreNumber,
+SUM(FA.SaleTotalProfit) AS TotalProfits
+
+FROM Dim_Store D
+JOIN Fact_SalesActual AS FA ON D.DimStoreID = FA.DimStoreID
+WHERE D.StoreNumber = 10 OR D.StoreNumber = 21
+GROUP BY D.StoreNumber
+ORDER BY TotalProfits
+
+
+
+--The product with the average profitability is greatest, and how often it is sold at each store
+
+Create View Profitability_Per_Item AS
+(Select Distinct A.DimProductID, A.StoreNumber, A.ProductName, B.AVERAGEPROFITPERPRODUCT_DOLLARAMOUNT, A.CountofProductPerStore
+FROM
+(SELECT Distinct P.DimProductID, P.ProductName, S.StoreNumber, SUM(SA.SaleQuantity) AS CountofProductPerStore, P.ProductProfitMarginUnitPercent
+  FROM Dim_Store S
+ JOIN Fact_SalesActual AS SA ON S.DimStoreID = SA.DimStoreID
+ JOIN Dim_Product AS P ON SA.DimProductID = P.DimProductID
+ WHERE S.StoreNumber = 10 OR S.StoreNumber = 21
+ GROUP BY P.DimProductID, P.ProductName, S.StoreNumber, P.ProductProfitMarginUnitPercent) A,
+ 
+ (SELECT Distinct P.DimProductID, AVG((SA.SaleTotalProfit / SA.SaleQuantity)) AS AVERAGEPROFITPERPRODUCT_DOLLARAMOUNT
+  FROM Dim_Product P
+ JOIN Fact_SalesActual AS SA ON P.DimProductID = SA.DimProductID
+ GROUP BY P.DimProductID) B
+ 
+WHERE A.DimProductID = B.DimProductID
+ORDER BY A.StoreNumber)
+
+
+--General table to get store targets and store profit in the same view
+
+Create View Store_Comparison_To_Target AS
+Select 
+S.DimStoreID, --DimStore
+S.StoreNumber, --DimStore
+ST.SalesTargetAmount, --FactSRC
+SUM(SA.SaleAmount) AS SalesPerStorePerYear,
+ST.DimTargetDateID-- FactSRC
+
+
+FROM Dim_Store S
+JOIN FACT_SRCSALESTARGET AS ST ON S.DimStoreID = ST.DimStoreID
+JOIN FACT_SALESACTUAL AS SA ON SA.DimStoreID = S.DimStoreID
+JOIN Dim_Date AS D ON SA.DimSalesDateID = D.Date_Pkey
+WHERE S.DimStoreID = 4 OR 6
+AND D.Year = 2013 OR 2014
+GROUP BY S.DimStoreID, S.StoreNumber, ST.SalesTargetAmount, ST.DimTargetDateID
+ORDER BY SalesPerStorePerYear;
+
+
+--How many products are sold per store per day
+Create View Product_Per_Store_Per_Day AS
+Select Distinct S.StoreNumber, P.DimProductID, D.DayOfTheWeek, SUM(SA.SaleQuantity) AS NumberSoldPerDay
+FROM Dim_Store S
+JOIN Fact_SalesActual AS SA ON S.DimStoreID = SA.DimStoreID
+JOIN Dim_Product AS P ON SA.DimProductID = P.DimProductID
+JOIN Dim_Date AS D ON SA.Date_PKey = D.Date_PKey
+WHERE S.StoreNumber = 10 OR S.StoreNumber = 21
+GROUP BY S.StoreNumber, P.DimProductID, D.DayOfTheWeek
+ORDER BY NumberSoldPerDay
+
+
+
+--What are sales and profit totals by store
+--What are the sales and profit totals for resellers
+Create View Profit_By_Location AS
+Select DimLocationID, State, City, StoreNumber, DimResellerID, SUM(SaleTotalProfit) AS TotalProfits
+FROM Dim_Location L
+LEFT JOIN Dim_Store AS S ON L.DimLocationID = S.DimLocationID
+LEFT JOIN Dim_Reseller AS R ON L.DimLocationID = R.DimLocationID
+JOIN Fact_SalesActual AS SA ON L.DimLocationID = SA.DimLocationID
+GROUP BY L.DimLocationID, L.State, L.City, S.StoreNumber, SA.SaleTotalProfit
+ORDER BY TotalProfits
+
+
+  
